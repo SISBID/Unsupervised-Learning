@@ -86,14 +86,12 @@ sum(A3)/2
 g1 <- graph.adjacency(A1, mode="undirected")
 g2 <- graph.adjacency(A2, mode="undirected")
 g3 <- graph.adjacency(A3, mode="undirected")
-g4 <- graph.adjacency(A4, mode="undirected")
 
 pdf('plot.pdf', width=9, height=3)
 par(mfrow = c(1,3))
 plot(g1,layout=layout.circle(g1), main='A1')
 plot(g2,layout=layout.circle(g2), main='A2')
 plot(g3,layout=layout.circle(g3), main='A3')
-plot(g4,layout=layout.circle(g4), main='A4')
 dev.off()
 g0 <- g2
 

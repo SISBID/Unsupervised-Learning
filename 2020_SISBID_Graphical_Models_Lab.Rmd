@@ -1,0 +1,212 @@
+---
+title: "2020 SISBID Graphical Models Lab"
+author: "Genevera I. Allen, Yufeng Liu, Hui Shen, Camille Little"
+date: "7/21/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+```{r message= FALSE, warning= FALSE}
+library("igraph")
+library("XMRF")
+library("huge")
+library("glasso")
+library("WGCNA")
+library("glmnet")
+```
+
+Read the Sachs et al data: Flow cytometry proteomics in single cells, $p = 11$ proteins measured in $n = 6466$ cells.
+```{r}
+sachscov <- as.matrix(read.table("sachscov.txt"))
+sachscor <- cov2cor(sachscov)
+sachsdat <- as.matrix(read.table("sachs.data.txt"))
+ps <- c("praf","pmek","plcg","PIP2","PIP3","P44","pakts","PKA","PKC","P38","pjnk")
+colnames(sachsdat) <- ps
+p <- ncol(sachsdat)
+n <- nrow(sachsdat)
+dim(sachsdat)
+dim(sachscov)
+head(sachsdat)
+```
+
+
+```{r}
+load("UnsupL_SISBID_2020.Rdata")
+```
+
+### Coexpression network 
+#### simple thresholding of correlations, at a cutoff chosen to give similar number of edges to partial correlation methods  
+* a randomly chosen threshold
+```{r}
+tau <- 0.1
+A1 <- abs(sachscor) > tau
+diag(A1) <- 0
+sum(A1)/2
+```
+
+
+#### testing for nonzero correlations     
+* testing for nonzero correlation, using Fisher Z-transform
+```{r}
+fisherzs <- atanh(sachscor)
+fisherps  <- 2*pnorm(abs(fisherzs), 0, 1/sqrt(n-3), lower.tail=FALSE)
+A2 <- fisherps < (0.01/(p*(p-1)/2))
+diag(A2) <- 0
+sum(A2)/2
+```
+
+## plot the three networks
+```{r}
+g1 <- graph.adjacency(A1, mode="undirected")
+g2 <- graph.adjacency(A2, mode="undirected")
+
+g0 <- g2
+```
+
+```{r}
+plot(g1,layout=layout.circle(g1), main='simple thresholding of correlations')
+plot(g2,layout=layout.circle(g2), main='testing for nonzero correlations')
+```
+
+## Partial correlation networks(under gaussian graphical models assumption)  
+inverse covariance matrix
+```{r}
+invcov <- abs(round(solve(sachscor),3)) 
+invcor <- cov2cor(invcov)
+A1 <- 1*(invcor > 0.05)
+diag(A1) <- 0
+sum(A1)/2
+g1 <- graph.adjacency(A1, mode="undirected")
+```
+
+```{r}
+plot(g1,layout=layout.circle(g1),main = "Partial correlation networks")
+```
+
+Graphical lasso  
+Calculate lambda, based on formula in the slides (the third method)
+```{r}
+alpha = 0.01
+num = qt(p=alpha/(2*(p^2)),df=n-2, lower.tail=F)
+lambda = num / sqrt(n-2 + num)
+```
+
+Apply glasso
+```{r}
+glasso.est <- glasso(s=sachscor,rho=lambda*4.2,approx=FALSE,
+                     penalize.diagonal=FALSE)
+A2 <- abs(glasso.est$wi) > 1E-16
+diag(A2) <- 0
+g2 <- graph.adjacency(A2, mode="undirected")
+```
+
+Neighborhood selection
+```{r}
+ns.est <- glasso(s=sachscor, rho=lambda, approx=TRUE, penalize.diagonal=FALSE)
+A3 <- abs(ns.est$wi) > 1E-16; diag(A3) <- 0
+g3 <- graph.adjacency(A3, mode="undirected")
+```
+
+Neighborhood selection estimate with huge (Stability selection for the value of $\lambda$)  
+```{r}
+X <- data.matrix(scale(sachsdat))
+neth = huge(X,method="mb")
+plot(neth)
+```
+
+
+```{r}
+## stability selection with huge
+net.s <- huge.select(neth, criterion="stars")
+plot(net.s)
+```
+
+
+```{r}
+#larger lambda
+mat = neth$path[[2]]
+neti = as.undirected(graph_from_adjacency_matrix(mat))
+plot(neti,vertex.label=colnames(X),vertex.size=2,vertex.label.cex=1.2,vertex.label.dist=1,layout=layout_with_kk)
+```
+
+
+```{r}
+#smaller lambda
+mat = neth$path[[5]]
+neti = as.undirected(graph_from_adjacency_matrix(mat))
+plot(neti,vertex.label=colnames(X),vertex.size=2,vertex.label.cex=1.2,vertex.label.dist=1,layout=layout_with_kk)
+```
+
+## Nonparanormal Models: rank-based correlation
+```{r}
+scor <- cor(sachsdat,method='spearman')
+scor <- 2*sin(scor*pi/6)
+npn.est <- glasso(s=scor, rho=lambda, approx=FALSE, penalize.diagonal=FALSE)
+A4 <- abs(npn.est$wi) > 1E-16
+diag(A4) <- 0
+g4 <- graph.adjacency(A4, mode="undirected")
+```
+
+## Nonparanormal Models -- alternative estiamtion
+```{r}
+npn.cor <- huge.npn(x=sachsdat, npn.func="skeptic", npn.thresh=NULL, verbose=FALSE)
+npn.est <- glasso(s=npn.cor, rho=lambda, penalize.diagonal=FALSE)
+A5 <- abs(npn.est$wi) > 1E-16
+diag(A5) <- 0
+g5 <- graph.adjacency(A5, mode="undirected")
+```
+
+## binary network estimation
+```{r}
+sachsbin <- 1*(sachsdat > 0) + -1*(sachsdat <= 0)
+head(sachsbin)
+bin.est <- matrix(0,p,p)
+## estiamte the neighborhood for each node 
+for(j in 1:p){
+  ## this is the same method used in neighborhood selection, the only difference is 'family'
+  nbr <- glmnet(x=sachsbin[,-j], y=sachsbin[,j], family='binomial', lambda=lambda) 
+  bin.est[j,-j] <- 1*(abs(as(nbr$beta,"matrix")) > 0)	#store the estimates in jth row of matrix
+}
+A6 <- bin.est
+diag(A6) <- 0
+sum(A6)/2
+g6 <- graph.adjacency(A6, mode="undirected")
+```
+
+## plot the networks
+```{r}
+plot(g1,layout=layout.circle(g1), main='Partial correlation networks')
+plot(g2,layout=layout.circle(g2), main='Glasso')
+plot(g3,layout=layout.circle(g3), main='Neighborhood selection')
+plot(g4,layout=layout.circle(g4), main='nonparanormal')
+plot(g5,layout=layout.circle(g5), main='nonparanormal - v2')
+plot(g6,layout=layout.circle(g6), main='Binary')
+```
+
+
+#### Poisson Graphical Models via XMRF package  
+Data set - Author Data. This data set consists of word counts from chapters written by four British authors.  
+```{r}
+TrueAuth = as.factor(rownames(author))
+X2 = log(1 + author[,1:69]) #log transform data
+```
+
+```{r}
+lam = lambdaMax(X2)*sqrt(log(ncol(X2))/nrow(X2))*0.02
+net = XMRF(t(X2),method="LPGM",lambda.path=lam,N=1,th=.001)
+mat = net$network[[1]]
+neti = as.undirected(graph_from_adjacency_matrix(mat))
+plot(neti,vertex.label=colnames(X2),vertex.size=2,vertex.label.cex=1.2,vertex.label.dist=1,layout=layout_with_kk)
+
+plot(neti,vertex.label=colnames(X2),vertex.size=2,vertex.label.cex=1.2,vertex.label.dist=1,layout=layout_in_circle)
+```
+
+
+
+

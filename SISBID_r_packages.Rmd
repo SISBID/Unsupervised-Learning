@@ -1,0 +1,33 @@
+---
+title: "Packages to Install"
+author: "Genevera I. Allen, Yufeng Liu, Hui Shen, Camille Little"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+#Install packages for demos and labs
+```{r setup, include=FALSE}
+install.packages('GGally')
+install.packages('animation')
+install.packages('igraph')
+install.packages('fastICA')
+install.packages('kknn')
+install.packages('ConsensusClusterPlus')
+install.packages('ggplot2')
+install.packages('WGCNA')
+install.packages('huge')
+install.packages('glasso')
+install.packages('umap')
+install.packages('NMF')
+install.packages('ISLR')
+install.packages('sda')
+install.packages('Rtsne')
+install.packages("sigclust")
+install.packages("devtools")
+devtools::install_github("DataSlingers/clustRviz")
+install.packages("PMA")
+install.packages("tidyr")
+```
+

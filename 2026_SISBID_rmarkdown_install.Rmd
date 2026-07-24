@@ -1,0 +1,68 @@
+---
+title: "Install R Markdown"
+author: "Genevera I. Allen & Yufeng Liu"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# A Guide to Installing and Using R Markdown
+
+## Install RStudio First
+
+RStudio is a desktop application that serves as an integrated development environment for the R computing language. Use the link below to install the appropriate version of RStudio for your computer.
+
+https://posit.co/download/rstudio-desktop/
+
+R Markdown should be included with RStudio. If needed, the `rmarkdown` package can also be installed from CRAN.
+
+For more information on R Markdown and how to use it, see:
+
+https://rmarkdown.rstudio.com/authoring_quick_tour.html#Installation
+
+## Topics covered in this module
+
+- Dimension Reduction
+- Clustering
+- Multiple Testing
+- Graphical Models
+- Validation and Comprehensive Unsupervised Learning Practice
+
+# Knit an R Markdown File
+
+To knit an R Markdown file, open the `.Rmd` file in RStudio and click the **Knit** button at the top of the editor. If LaTeX is not installed on your computer, knit to an HTML file. LaTeX is not required for the SISBID demos and labs unless you specifically want PDF output.
+
+# Install Packages
+
+To install the packages needed for the 2026 demos and labs, use the companion package file:
+
+`2026_SISBID_R_packages.Rmd`
+
+Open that file in RStudio and run the installation chunk. It installs only packages that are missing from your current R installation.
+
+# Packages used in the 2026 demos and labs
+
+The current collection uses the following R packages:
+
+- `cluster`
+- `fastICA`
+- `GGally`
+- `ggplot2`
+- `ggrepel`
+- `glasso`
+- `glmnet`
+- `huge`
+- `igraph`
+- `ISLR`
+- `ISLR2`
+- `knitr`
+- `mclust`
+- `NMF`
+- `pheatmap`
+- `Rtsne`
+- `rmarkdown`
+- `sda`
+- `umap`
+
+
+The package list intentionally focuses on the packages used by the final 2026 demo/lab files. 

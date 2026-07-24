@@ -1,0 +1,65 @@
+---
+title: "Packages to Install"
+author: "Genevera I. Allen & Yufeng Liu"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Install packages for the 2026 demos and labs
+
+Run the chunk below once before working through the 2026 SISBID unsupervised learning demos and labs. The code checks which packages are already installed and only installs the missing packages.
+
+```{r install-packages, eval=FALSE}
+options(repos = c(CRAN = "https://cran.rstudio.com"))
+
+cran_packages <- c(
+  "cluster",
+  "fastICA",
+  "GGally",
+  "ggplot2",
+  "ggrepel",
+  "glasso",
+  "glmnet",
+  "huge",
+  "igraph",
+  "ISLR",
+  "ISLR2",
+  "knitr",
+  "mclust",
+  "NMF",
+  "pheatmap",
+  "Rtsne",
+  "rmarkdown",
+  "sda",
+  "umap"
+)
+
+install_if_missing <- function(pkgs) {
+  is_installed <- vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)
+  missing_pkgs <- pkgs[!is_installed]
+
+  if (length(missing_pkgs) == 0) {
+    message("All requested packages are already installed.")
+  } else {
+    message("Installing: ", paste(missing_pkgs, collapse = ", "))
+    install.packages(missing_pkgs)
+  }
+}
+
+install_if_missing(cran_packages)
+```
+
+# Package list by file
+
+| File | Packages used |
+|---|---|
+| `2026_SISBID_PCA_Demo.Rmd` | `ggplot2`, `GGally`, `ISLR`, `ISLR2`, `knitr` |
+| `2026_SISBID_PCA_Lab.Rmd` | `ggplot2`, `fastICA`, `NMF`, `umap`, `Rtsne`, `GGally`, `knitr` |
+| `2026_SISBID_Clustering_Demo.Rmd` | `ggplot2`, `cluster`, `ISLR`, `ISLR2`, `knitr` |
+| `2026_SISBID_Clustering_Lab_fixed_v2.Rmd` | `ggplot2`, `NMF`, `cluster`, `mclust`, `ggrepel`, `pheatmap`, `umap`, `knitr` |
+| `2026_SISBID_Testing_Demo_fixed.Rmd` | `sda`, `ggplot2`, `knitr` |
+| `2026_SISBID_Graphical_Models_Demo.Rmd` | `igraph`, `huge`, `glasso`, `glmnet`, `ggplot2`, `knitr` |
+| `2026_SISBID_Unsupervised_Lab_v3.Rmd` | `ggplot2`, `GGally`, `igraph`, `umap`, `Rtsne`, `pheatmap`, `huge`, `knitr` |
+

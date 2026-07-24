@@ -1,0 +1,424 @@
+---
+title: "2026 SISBID PCA Demo"
+author: "Genevera I. Allen & Yufeng Liu"
+output:
+  pdf_document: default
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+
+# Setup
+
+```{r setup, echo = TRUE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 7,
+  fig.height = 5
+)
+
+needed_packages <- c("ggplot2", "GGally")
+missing_packages <- needed_packages[!vapply(needed_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing_packages) > 0) {
+  stop("Please install these packages before knitting: ", paste(missing_packages, collapse = ", "))
+}
+
+library(ggplot2)
+library(GGally)
+
+theme_set(theme_minimal(base_size = 12))
+set.seed(1)
+```
+
+Helper functions used throughout the demo:
+
+```{r helpers, echo = TRUE}
+variance_table <- function(pca_object) {
+  variance <- pca_object$sdev^2
+  pct <- 100 * variance / sum(variance)
+  data.frame(
+    component = seq_along(pct),
+    pct_variance = pct,
+    cumulative_pct_variance = cumsum(pct)
+  )
+}
+
+plot_variance <- function(var_tbl, title = "Variance explained", max_components = 30) {
+  keep <- seq_len(min(max_components, nrow(var_tbl)))
+  plot_df <- rbind(
+    data.frame(
+      component = var_tbl$component[keep],
+      value = var_tbl$pct_variance[keep],
+      metric = "Variance explained"
+    ),
+    data.frame(
+      component = var_tbl$component[keep],
+      value = var_tbl$cumulative_pct_variance[keep],
+      metric = "Cumulative variance explained"
+    )
+  )
+
+  ggplot(plot_df, aes(x = component, y = value)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 1.8) +
+    facet_wrap(~ metric, ncol = 1, scales = "free_y") +
+    labs(
+      title = title,
+      x = "Principal component",
+      y = "Percent"
+    )
+}
+
+top_loadings <- function(pca_object, component = 1, n = 8) {
+  loadings <- pca_object$rotation[, component]
+  ord <- order(abs(loadings), decreasing = TRUE)
+  ord <- ord[seq_len(min(n, length(ord)))]
+  data.frame(
+    component = paste0("PC", component),
+    variable = names(loadings)[ord],
+    loading = round(loadings[ord], 3),
+    absolute_loading = round(abs(loadings[ord]), 3),
+    row.names = NULL
+  )
+}
+```
+
+# PCA Demo Using Digits Data
+
+## Load digits data
+
+```{r load-digits, echo = TRUE}
+data_file <- "UnsupL_SISBID_2026.Rdata"
+if (!file.exists(data_file)) {
+  stop("Expected data file not found: ", data_file)
+}
+
+load(data_file)
+
+if (!exists("digits")) {
+  stop("The data file must contain an object named 'digits'.")
+}
+
+if (!exists("imagedigit")) {
+  imagedigit <- function(x) {
+    side <- sqrt(length(x))
+    if (side != floor(side)) {
+      stop("Cannot display image: digit vector length is not a perfect square.")
+    }
+    mat <- matrix(x, nrow = side, byrow = TRUE)
+    image(t(apply(mat, 2, rev)), axes = FALSE, col = gray.colors(256))
+  }
+}
+
+digits <- as.matrix(digits)
+digit_labels <- rownames(digits)
+
+if (is.null(digit_labels)) {
+  stop("The digits matrix must have row names containing digit labels.")
+}
+
+digit_keep <- digit_labels %in% c("3", "8")
+dat38 <- digits[digit_keep, , drop = FALSE]
+dat38_labels <- factor(digit_labels[digit_keep], levels = c("3", "8"))
+
+cat("Number of selected digit images:", nrow(dat38), "\n")
+cat("Number of pixels per image:", ncol(dat38), "\n")
+table(dat38_labels)
+```
+
+## Visualize a few original images
+
+```{r digit-examples, echo = TRUE, fig.width = 8, fig.height = 3}
+example_ids <- c(which(dat38_labels == "3")[1:5], which(dat38_labels == "8")[1:5])
+example_ids <- example_ids[!is.na(example_ids)]
+
+old_par <- par(mfrow = c(2, 5), mar = c(0.2, 0.2, 1.5, 0.2))
+for (i in example_ids) {
+  imagedigit(dat38[i, ])
+  title(main = paste("Digit", dat38_labels[i]))
+}
+par(old_par)
+```
+
+## PCA on centered digit pixels
+
+For image data, we center each pixel before PCA. We do not scale pixels here because scaling can over-emphasize nearly constant background pixels. For data sets with variables on very different scales, see the College example below.
+
+```{r digit-pca, echo = TRUE}
+digit_pca <- prcomp(dat38, center = TRUE, scale. = FALSE)
+digit_var <- variance_table(digit_pca)
+
+head(digit_var, 10)
+```
+
+## PC scatterplot
+
+```{r digit-pc-scatter, echo = TRUE}
+digit_score_mat <- digit_pca$x[, 1:5, drop = FALSE]
+rownames(digit_score_mat) <- NULL
+digit_scores <- as.data.frame(digit_score_mat)
+digit_scores$digit <- dat38_labels
+
+ggplot(digit_scores, aes(x = PC1, y = PC2, color = digit)) +
+  geom_point(alpha = 0.75, size = 2) +
+  labs(
+    title = "Digits 3 and 8: first two principal components",
+    x = paste0("PC1 (", round(digit_var$pct_variance[1], 1), "% variance)"),
+    y = paste0("PC2 (", round(digit_var$pct_variance[2], 1), "% variance)"),
+    color = "Digit"
+  )
+```
+
+## Pairs plot for the first five PCs
+
+```{r digit-pairs, echo = TRUE, fig.width = 8, fig.height = 8}
+ggpairs(
+  digit_scores,
+  columns = 1:5,
+  mapping = aes(color = digit),
+  title = "Pairwise plots of the first five digit PCs"
+)
+```
+
+## PC Loadings
+
+Each loading image shows a direction of variation in pixel space. Bright and dark regions indicate pixels that move in opposite directions along that component.
+
+```{r digit-loadings, echo = TRUE, fig.width = 8, fig.height = 5}
+old_par <- par(mfrow = c(3, 5), mar = c(0.2, 0.2, 1.5, 0.2))
+for (i in 1:15) {
+  imagedigit(digit_pca$rotation[, i])
+  title(main = paste0("PC", i))
+}
+par(old_par)
+```
+
+## Variance explained
+
+```{r digit-variance, echo = TRUE}
+plot_variance(digit_var, title = "Digit PCA variance explained", max_components = 30)
+```
+
+```{r digit-components-needed, echo = TRUE}
+thresholds <- c(50, 75, 90, 95)
+components_needed <- sapply(thresholds, function(thresh) {
+  which(digit_var$cumulative_pct_variance >= thresh)[1]
+})
+
+data.frame(
+  cumulative_variance_threshold = paste0(thresholds, "%"),
+  components_needed = components_needed
+)
+```
+
+## Low-rank reconstruction
+
+
+```{r digit-reconstruction, echo = TRUE, fig.width = 8, fig.height = 3}
+reconstruct_digit <- function(row_id, n_components) {
+  scores <- digit_pca$x[row_id, 1:n_components, drop = FALSE]
+  loadings <- digit_pca$rotation[, 1:n_components, drop = FALSE]
+  reconstruction <- scores %*% t(loadings)
+  as.numeric(reconstruction + digit_pca$center)
+}
+
+row_id <- which(dat38_labels == "3")[1]
+component_grid <- c(1, 5, 20, 50)
+component_grid <- component_grid[component_grid <= ncol(digit_pca$x)]
+
+old_par <- par(mfrow = c(1, length(component_grid) + 1), mar = c(0.2, 0.2, 1.8, 0.2))
+imagedigit(dat38[row_id, ])
+title(main = "Original")
+
+for (k in component_grid) {
+  imagedigit(reconstruct_digit(row_id, k))
+  title(main = paste(k, "PCs"))
+}
+par(old_par)
+```
+
+# PCA via SVD
+
+
+## Raw SVD without centering
+
+```{r raw-svd, echo = TRUE}
+svd_raw <- svd(dat38)
+raw_scores <- sweep(svd_raw$u[, 1:5, drop = FALSE], 2, svd_raw$d[1:5], `*`)
+colnames(raw_scores) <- paste0("SVD", 1:5)
+raw_score_df <- as.data.frame(raw_scores)
+raw_score_df$digit <- dat38_labels
+
+raw_var <- data.frame(
+  component = seq_along(svd_raw$d),
+  pct_variance = 100 * svd_raw$d^2 / sum(svd_raw$d^2)
+)
+raw_var$cumulative_pct_variance <- cumsum(raw_var$pct_variance)
+```
+
+```{r raw-svd-scatter, echo = TRUE}
+ggplot(raw_score_df, aes(x = SVD1, y = SVD2, color = digit)) +
+  geom_point(alpha = 0.75, size = 2) +
+  labs(
+    title = "Raw SVD scores for digits 3 and 8",
+    x = paste0("SVD1 (", round(raw_var$pct_variance[1], 1), "% raw sum-of-squares)"),
+    y = paste0("SVD2 (", round(raw_var$pct_variance[2], 1), "% raw sum-of-squares)"),
+    color = "Digit"
+  )
+```
+
+## SVD Loadings
+
+```{r raw-svd-loadings, echo = TRUE, fig.width = 8, fig.height = 5}
+old_par <- par(mfrow = c(3, 5), mar = c(0.2, 0.2, 1.5, 0.2))
+for (i in 1:15) {
+  imagedigit(svd_raw$v[, i])
+  title(main = paste0("SVD", i))
+}
+par(old_par)
+```
+
+## Raw SVD variance explained
+
+```{r raw-svd-variance, echo = TRUE}
+plot_variance(raw_var, title = "Raw SVD variance explained", max_components = 30)
+```
+
+## Centered SVD and PCA equivalence check
+
+```{r centered-svd-check, echo = TRUE}
+centered_digits <- scale(dat38, center = TRUE, scale = FALSE)
+svd_centered <- svd(centered_digits)
+
+# Singular vectors are identifiable only up to sign, so compare absolute values.
+max_loading_difference <- max(abs(abs(svd_centered$v[, 1]) - abs(digit_pca$rotation[, 1])))
+max_loading_difference
+```
+
+# PCA Demo Using College Data
+
+## Load College data
+
+```{r load-college, echo = TRUE}
+load_college_data <- function() {
+  env <- new.env(parent = emptyenv())
+
+  if (requireNamespace("ISLR", quietly = TRUE)) {
+    data("College", package = "ISLR", envir = env)
+    return(get("College", envir = env))
+  }
+
+  if (requireNamespace("ISLR2", quietly = TRUE)) {
+    data("College", package = "ISLR2", envir = env)
+    return(get("College", envir = env))
+  }
+
+  stop("Please install either the ISLR or ISLR2 package to use the College data.")
+}
+
+College <- load_college_data()
+college_numeric <- vapply(College, is.numeric, logical(1))
+cdat <- College[, college_numeric, drop = FALSE]
+
+cat("College data dimensions:", dim(cdat), "\n")
+names(cdat)
+```
+
+## PCA with centering and scaling
+
+For the College data, centering and scaling are important because variables such as enrollment counts, graduation rates, and dollar amounts are measured on different scales.
+
+```{r college-pca, echo = TRUE}
+college_pca <- prcomp(cdat, center = TRUE, scale. = TRUE)
+college_var <- variance_table(college_pca)
+
+head(college_var, 10)
+```
+
+## PC scatterplot
+
+```{r college-scatter, echo = TRUE}
+college_scores <- as.data.frame(college_pca$x[, 1:5, drop = FALSE])
+college_scores$college <- rownames(College)
+college_scores$Private <- College$Private
+
+ggplot(college_scores, aes(x = PC1, y = PC2, color = Private, label = college)) +
+  geom_point(alpha = 0.8, size = 2) +
+  geom_text(check_overlap = TRUE, size = 2.5, vjust = 1.2, show.legend = FALSE) +
+  labs(
+    title = "College data: first two principal components",
+    x = paste0("PC1 (", round(college_var$pct_variance[1], 1), "% variance)"),
+    y = paste0("PC2 (", round(college_var$pct_variance[2], 1), "% variance)"),
+    color = "Private college?"
+  )
+```
+
+## Pairs plot
+
+```{r college-pairs, echo = TRUE, fig.width = 8, fig.height = 8}
+ggpairs(
+  college_scores,
+  columns = 1:5,
+  mapping = aes(color = Private),
+  title = "Pairwise plots of the first five College PCs"
+)
+```
+
+## Loadings: variables that contribute to the patterns
+
+```{r college-loadings-table, echo = TRUE}
+college_top_loadings <- rbind(
+  top_loadings(college_pca, component = 1, n = 8),
+  top_loadings(college_pca, component = 2, n = 8)
+)
+
+knitr::kable(college_top_loadings)
+```
+
+```{r college-loadings-plot, echo = TRUE, fig.height = 6}
+loading_df <- rbind(
+  data.frame(
+    variable = rownames(college_pca$rotation),
+    loading = college_pca$rotation[, 1],
+    component = "PC1"
+  ),
+  data.frame(
+    variable = rownames(college_pca$rotation),
+    loading = college_pca$rotation[, 2],
+    component = "PC2"
+  )
+)
+
+ggplot(loading_df, aes(x = reorder(variable, loading), y = loading)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ component, ncol = 1, scales = "free_y") +
+  labs(
+    title = "College PCA loadings for PC1 and PC2",
+    x = NULL,
+    y = "Loading"
+  )
+```
+
+## Variance explained
+
+```{r college-variance, echo = TRUE}
+plot_variance(college_var, title = "College PCA variance explained", max_components = nrow(college_var))
+```
+
+```{r college-components-needed, echo = TRUE}
+thresholds <- c(50, 75, 90, 95)
+components_needed <- sapply(thresholds, function(thresh) {
+  which(college_var$cumulative_pct_variance >= thresh)[1]
+})
+
+data.frame(
+  cumulative_variance_threshold = paste0(thresholds, "%"),
+  components_needed = components_needed
+)
+```
